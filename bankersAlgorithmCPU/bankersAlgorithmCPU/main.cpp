@@ -42,7 +42,7 @@ void printMatrix(const std::vector<T> & matrix, int nRows, int nCols, const char
 int main()
 {
 
-	bool multiThreaded = true;
+	bool multiThreaded = false;
 
 	/*std::vector<int> available(numResources);
 	std::vector<int> max(numProcesses * numResources);
@@ -85,40 +85,49 @@ int main()
 	std::vector<int> request = { 1, 2, 0 };
 	unsigned int requestingProcessId = 0;*/
 
-	// Initialize matrices
-
-	int maxResourceAmount = 6;
-
-	std::random_device rd;
-	std::mt19937 mt(rd());
-	std::uniform_int_distribution<int> dist(0, maxResourceAmount);
-
-	// max matrix
-	/*for (int i = 0; i < numProcesses * numResources; i++)
-	{
-			max.at(i) = dist(mt);
-	}*/
-	printMatrix<int>(max, numProcesses, numResources, "max");
-
-	// allocation and need matrices. allocation can't be greater than max. need = max - allocation
-	/*for (int i = 0; i < numProcesses * numResources; i++)
-	{
-			dist.param(std::uniform_int_distribution<int>::param_type(0, max.at(i)));
-			allocation.at(i) = dist(mt);
-			need.at(i) = max.at(i) - allocation.at(i);
-	}*/
 	std::transform(max.begin(), max.end(), allocation.begin(), need.begin(), std::minus<int>());
 
+	/* RANDOM INITIALIZATION*/
+
+	//std::vector<int> available(numResources);
+	//std::vector<int> max(numProcesses * numResources);
+	//std::vector<int> allocation(numProcesses * numResources);
+	//std::vector<int> need(numProcesses * numResources);
+
+	//std::vector<int> request(numResources);
+	//unsigned int requestingProcessId = 1;
+
+	//int maxResourceAmount = 6;
+
+	//std::random_device rd;
+	//std::mt19937 mt(rd());
+	//std::uniform_int_distribution<int> dist(0, maxResourceAmount);
+
+	//// max matrix
+	//for (int i = 0; i < numProcesses * numResources; i++)
+	//{
+	//	max.at(i) = dist(mt);
+	//}
+	//
+	//// allocation and need matrices. allocation can't be greater than max. need = max - allocation
+	//for (int i = 0; i < numProcesses * numResources; i++)
+	//{
+	//	dist.param(std::uniform_int_distribution<int>::param_type(0, max.at(i)));
+	//	allocation.at(i) = dist(mt);
+	//	need.at(i) = max.at(i) - allocation.at(i);
+	//}
+	//
+	//for (int i = 0; i < numResources; i++)
+	//{
+	//	dist.param(std::uniform_int_distribution<int>::param_type(0, maxResourceAmount / 2));
+	//	available[i] = dist(mt);
+	//}
+
+	/*END OF RANDOM INITIALIZATION*/
+
+	printMatrix<int>(max, numProcesses, numResources, "max");
 	printMatrix<int>(allocation, numProcesses, numResources, "allocation");
 	printMatrix<int>(need, numProcesses, numResources, "need");
-
-
-
-	/*for (int i = 0; i < numResources; i++)
-	{
-		dist.param(std::uniform_int_distribution<int>::param_type(0, maxResourceAmount / 2));
-		available[i] = dist(mt);
-	}*/
 	printMatrix<int>(available, 1, numResources, "available");
 	printMatrix<int>(request, 1, numResources, "request");
 

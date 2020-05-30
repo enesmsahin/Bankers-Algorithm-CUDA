@@ -1,18 +1,18 @@
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-#include <cuda_runtime_api.h>
+#include <device_functions.h>
 
 #include <iostream>
 #include <random>
 #include <cmath>
 
 #define CHECK(status)									            \
-{														            \
-	if (status != cudaSuccess)							            \
-	{													            \
-		std::cout << "Cuda error: " << cudaGetErrorString(status);  \
-	}													            \
+{														                    \
+	if (status != cudaSuccess)							                    \
+	{													                    \
+		std::cout << "Cuda error: " << cudaGetErrorString(status) << "\n";  \
+	}													                    \
 }
 
 //QueryPerformanceCounter related stuff
@@ -76,9 +76,113 @@ __global__ void addVectors(int* vecA, int* vecB, int vecSize)
     }
 }
 
+// ATOMICALLY Element-wise addition of two vectors. Adds vecA to vecB and stores the result in vecA
+__global__ void addVectorsAtomic(int* vecA, int* vecB, int vecSize)
+{
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < vecSize)
+    {
+        atomicAdd(&vecA[tid], vecB[tid]);
+    }
+}
+
+
+__global__ void safetyState(int* work, int* need, int* allocation, bool* finish, int numResources, int numProcesses, bool* isSafe)
+{
+    unsigned int tid = threadIdx.x; // Process ID in Banker's Algorithm.
+    extern __shared__ bool finish_shared[];
+
+    finish_shared[tid] = finish[tid]; // Copy finish vector to the shared memory
+
+    dim3 grid_d, block_d; // grid and block for dynamic parallelism
+    
+    block_d.x = (unsigned int)fminf(numResources, 1024);
+    grid_d.x = static_cast<unsigned int>(std::ceil(static_cast<double>(numResources) / block_d.x));
+
+    bool* isNeedGreaterThanWork; // Flag to be set if need(i) <= work is not satisfied
+    cudaMalloc(&isNeedGreaterThanWork, sizeof(bool));
+
+    /* Last element of the shared memory is used in order to indicate if a change is made to the work vector or not,
+    i.e. if at least one process finished during that iteration.
+
+    This flag will also be used for determining whether state is safe or not. See below for explanation. */
+    if (tid == 0)
+    {
+        finish_shared[blockDim.x] = true;
+    }
+
+    while (finish_shared[tid] == false)
+    {
+        __syncthreads();
+
+        /* If at least one change is made to the work vector by any of the processes (or if it is the first iteration),
+        check need(i) <= work(i) for all unfinished processes. If it is false, no process was able to finis during that iteration,
+        so safety check terminates */
+        if (finish_shared[blockDim.x] == true)
+        {
+            __syncthreads();
+            if (tid == 0)
+            {
+                finish_shared[blockDim.x] = false; // Reset work vector's update flag
+            }
+
+            *isNeedGreaterThanWork = false;
+            // Check if need(i) <= work(i) for all i. If not, isNeedGreaterThanWork becomes true
+            checkIfGreater << <grid_d, block_d >> > (&need[tid * numResources], work, numResources, isNeedGreaterThanWork);
+            cudaDeviceSynchronize(); // Wait for child kernel to finish
+
+            if (*isNeedGreaterThanWork == false) // Second condition is also satisfied, this process can finish given the current states of matrices
+            {
+                addVectorsAtomic << <grid_d, block_d >> > (work, &allocation[tid * numResources], numResources); // Move resources allocated to this process to the work matrix
+                finish_shared[tid] = true; // Set finish flag of this process to true
+
+                finish_shared[blockDim.x] = true; // A change has been made to the work vector, update flag
+
+                cudaDeviceSynchronize(); // Wait for child kernel to finish
+            }
+        }
+        else
+        {
+            break;
+        }
+        __syncthreads();
+    }
+    __syncthreads();
+
+
+    /* SCENARIOS FOR STATE OF THE finish_shared[blockDim.x] flag:
+
+    1 - NONE OF THE PROCESSES IS ABLE TO FINISH AT FIRST ITERATION, flag is set to false. At the 2nd iteration, loop is broken. flag == false
+
+    2 - SOME OF THE PROCESSES FINISHED EARLIER. AT SOME POINT NONE OF THE PROCESSES IS ABLE TO FINISH. 
+        So, none of the processes is able to set the flag to true. At the next iteration, loop is broken. flag == false
+
+    3 - ALL OF THE PROCESSES ARE ABLE TO FINISH. At the last iteration, last process finished and set flag = true.
+        At the next iteration, none of the processes has finish_shared[tid] == false since all of them are finished. Loop is exited and flag == true.
+
+    So, if the state is safe, i.e. all processes are able to finish (Scenario - 3), then flag == true. Otherwise, if the state is unsafe, flag == false.
+    */
+    if (tid == 0)
+    {
+        if (finish_shared[blockDim.x] == true)
+        {
+            *isSafe = true;
+        }
+        else
+        {
+            *isSafe = false;
+        }
+    }
+
+    finish[tid] = finish_shared[tid];
+
+    cudaFree(isNeedGreaterThanWork);
+}
+
 
 // Helper functions
-void printMatrix(int* matrix, int nRows, int nCols, const char* matrixName)
+template<class T>
+void printMatrix(T* matrix, int nRows, int nCols, const char* matrixName)
 {
     std::cout << "\n" << matrixName << ":\n";
     for (int i = 0; i < nRows; i++)
@@ -174,11 +278,11 @@ int main()
     /*END OF RANDOM INITIALIZATION*/
 
 
-    printMatrix(max_h, numProcesses, numResources, "max_h");
-    printMatrix(allocation_h, numProcesses, numResources, "allocation_h");
-    printMatrix(need_h, numProcesses, numResources, "need_h");
-    printMatrix(available_h, 1, numResources, "available_h");
-    printMatrix(request_h, 1, numResources, "request_h");
+    printMatrix<int>(max_h, numProcesses, numResources, "max_h");
+    printMatrix<int>(allocation_h, numProcesses, numResources, "allocation_h");
+    printMatrix<int>(need_h, numProcesses, numResources, "need_h");
+    printMatrix<int>(available_h, 1, numResources, "available_h");
+    printMatrix<int>(request_h, 1, numResources, "request_h");
 
     StartCounter();
 
@@ -189,11 +293,11 @@ int main()
     CHECK(cudaStreamCreate(&stream_4));
 
 
-    CHECK(cudaMemcpyAsync((void*)available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice, 0));
-    CHECK(cudaMemcpyAsync((void*)max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_1));
-    CHECK(cudaMemcpyAsync((void*)allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_2));
-    CHECK(cudaMemcpyAsync((void*)need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_3));
-    CHECK(cudaMemcpyAsync((void*)request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice, stream_4));
+    CHECK(cudaMemcpyAsync(available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice, 0));
+    CHECK(cudaMemcpyAsync(max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_1));
+    CHECK(cudaMemcpyAsync(allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_2));
+    CHECK(cudaMemcpyAsync(need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_3));
+    CHECK(cudaMemcpyAsync(request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice, stream_4));
 
     /*SINGLE-STREAM MEMCPY OF MATRICES TO THE DEVICE*/
     /*cudaStream_t stream_1, stream_2, stream_3, stream_4;
@@ -202,11 +306,11 @@ int main()
     CHECK(cudaStreamCreate(&stream_3));
     CHECK(cudaStreamCreate(&stream_4));
 
-    CHECK(cudaMemcpy((void*)available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy((void*)max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy((void*)allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy((void*)need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy((void*)request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice));*/
+    CHECK(cudaMemcpy(available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice));*/
 
     CHECK(cudaDeviceSynchronize());
 
@@ -219,8 +323,8 @@ int main()
 
     dim3 grid, block;
 
-    block.x = std::min(numProcesses, 1024);
-    grid.x = static_cast<unsigned int>(std::ceil(static_cast<double>(numProcesses) / block.x));
+    block.x = std::min(numResources, 1024);
+    grid.x = static_cast<unsigned int>(std::ceil(static_cast<double>(numResources) / block.x));
 
     bool* isNotValidated_h,* isNotValidated_d; // 2 - dim arrays holding whether Request_i < Need(i) and Request_i < Available_i for all i or not
 
@@ -229,11 +333,13 @@ int main()
     CHECK(cudaMalloc(&isNotValidated_d, 2 * sizeof(bool)));
     CHECK(cudaMemset((void*)isNotValidated_d, 0, 2 * sizeof(bool)));
 
+    CHECK(cudaDeviceSynchronize());
+
     checkIfGreater << <grid, block, 0, stream_1 >> > (request_d, &need_d[numResources * requestingProcessId], numResources, &isNotValidated_d[0]);
     checkIfGreater << <grid, block, 0, stream_2 >> > (request_d, available_d, numResources, &isNotValidated_d[1]);
 
-    CHECK(cudaMemcpyAsync((void*)&isNotValidated_h[0], &isNotValidated_d[0], sizeof(bool), cudaMemcpyDeviceToHost, stream_1));
-    CHECK(cudaMemcpyAsync((void*)&isNotValidated_h[1], &isNotValidated_d[1], sizeof(bool), cudaMemcpyDeviceToHost, stream_2));
+    CHECK(cudaMemcpyAsync(&isNotValidated_h[0], &isNotValidated_d[0], sizeof(bool), cudaMemcpyDeviceToHost, stream_1));
+    CHECK(cudaMemcpyAsync(&isNotValidated_h[1], &isNotValidated_d[1], sizeof(bool), cudaMemcpyDeviceToHost, stream_2));
 
     CHECK(cudaDeviceSynchronize());
 
@@ -250,7 +356,7 @@ int main()
 
     // If request is valid, go to modification state and modify the available, allocation, and need matrices as if the allocation was made
    
-    // MODIFICATION STATE
+    /* MODIFICATION STATE */
 
     subtractVectors << <grid, block, 0, stream_1 >> > (available_d, request_d, numResources); // available(i) = available(i) - request_i
     addVectors << <grid, block, 0, stream_2 >> > (&allocation_d[numResources * requestingProcessId], request_d, numResources); // allocation(i) = allocation(i) + request_i
@@ -258,21 +364,66 @@ int main()
 
     CHECK(cudaDeviceSynchronize());
 
+    /* END OF MODIFICATION STATE */
+
     /* COPY MODIFIED VECTORS BACK TO THE HOST AND PRINT -- JUST FOR PRINTING AND VERIFICATION. NOT ACTIVATED DURING BENCHMARKING */
     int* available_h_modified = new int[numResources];
     int* allocation_h_modified = new int[numProcesses * numResources];
     int* need_h_modified = new int[numProcesses * numResources];
-    CHECK(cudaMemcpyAsync((void*)available_h_modified, available_d, numResources * sizeof(int), cudaMemcpyDeviceToHost, stream_1));
-    CHECK(cudaMemcpyAsync((void*)allocation_h_modified, allocation_d, numProcesses * numResources * sizeof(int), cudaMemcpyDeviceToHost, stream_2));
-    CHECK(cudaMemcpyAsync((void*)need_h_modified, need_d, numProcesses * numResources * sizeof(int), cudaMemcpyDeviceToHost, stream_3));
+    CHECK(cudaMemcpyAsync(available_h_modified, available_d, numResources * sizeof(int), cudaMemcpyDeviceToHost, stream_1));
+    CHECK(cudaMemcpyAsync(allocation_h_modified, allocation_d, numProcesses * numResources * sizeof(int), cudaMemcpyDeviceToHost, stream_2));
+    CHECK(cudaMemcpyAsync(need_h_modified, need_d, numProcesses * numResources * sizeof(int), cudaMemcpyDeviceToHost, stream_3));
 
     CHECK(cudaDeviceSynchronize());
 
-    printMatrix(allocation_h_modified, numProcesses, numResources, "allocation_h_modified");
-    printMatrix(need_h_modified, numProcesses, numResources, "need_h_modified");
-    printMatrix(available_h_modified, 1, numResources, "available_h_modified");
+    printMatrix<int>(allocation_h_modified, numProcesses, numResources, "allocation_h_modified");
+    printMatrix<int>(need_h_modified, numProcesses, numResources, "need_h_modified");
+    printMatrix<int>(available_h_modified, 1, numResources, "available_h_modified");
+
+    delete[] available_h_modified;
+    delete[] need_h_modified;
+    delete[] allocation_h_modified;
 
     /* END OF COPY MODIFIED VECTORS BACK TO THE HOST AND PRINT */
+
+    /* SAFETY STATE */
+
+    // Initialize work and finish vectors
+    int* work_d; // 1 x numResources
+    bool* finish_d; // 1 x numProcesses
+
+    CHECK(cudaMalloc(&work_d, numResources * sizeof(int)));
+    CHECK(cudaMalloc(&finish_d, numProcesses * sizeof(bool)));
+
+    /* ************************ May not be necessary, just use available_d as work matrix *************************** */
+    CHECK(cudaMemcpyAsync(work_d, available_d, numResources * sizeof(int), cudaMemcpyDeviceToDevice, stream_1));
+    CHECK(cudaMemsetAsync((void*)finish_d, 0, numProcesses * sizeof(bool), stream_2));
+
+    CHECK(cudaDeviceSynchronize());
+
+    bool* isSafe_h, * isSafe_d;
+
+    isSafe_h = new bool;
+    CHECK(cudaMalloc(&isSafe_d, sizeof(bool)));
+
+    dim3 block_safety;
+    block_safety.x = std::min(numProcesses, 1024);
+
+    safetyState << <1, block_safety, (block_safety.x + 1) * sizeof(bool), stream_1 >> > (work_d, need_d, allocation_d, finish_d, numResources, numProcesses, isSafe_d);
+
+    CHECK(cudaDeviceSynchronize());
+
+    CHECK(cudaMemcpy(isSafe_h, isSafe_d, sizeof(bool), cudaMemcpyDeviceToHost));
+
+    /* END OF SAFETY STATE */
+
+    bool* finish_h = new bool[numProcesses];
+
+    CHECK(cudaMemcpy(finish_h, finish_d, numProcesses * sizeof(bool), cudaMemcpyDeviceToHost));
+
+    printMatrix<bool>(finish_h, 1, numProcesses, "finish_h");
+
+    std::cout << "IS SAFE: " << *isSafe_h << "\n";
 
     // Destroy streams
     CHECK(cudaStreamDestroy(stream_1));
@@ -287,11 +438,20 @@ int main()
     delete[] need_h;
     delete[] request_h;
 
+    delete[] isNotValidated_h;
+    delete isSafe_h;
+
+
     CHECK(cudaFree(available_d));
     CHECK(cudaFree(max_d));
     CHECK(cudaFree(allocation_d));
     CHECK(cudaFree(need_d));
     CHECK(cudaFree(request_d));
+
+    CHECK(cudaFree(isNotValidated_d));
+    CHECK(cudaFree(work_d));
+    CHECK(cudaFree(finish_d));
+    CHECK(cudaFree(isSafe_d));
 
     return 0;
 }
