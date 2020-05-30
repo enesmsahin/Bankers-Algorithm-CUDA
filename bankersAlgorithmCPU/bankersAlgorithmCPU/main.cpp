@@ -120,6 +120,7 @@ int main()
 		available[i] = dist(mt);
 	}*/
 	printMatrix<int>(available, 1, numResources, "available");
+	printMatrix<int>(request, 1, numResources, "request");
 
 	bool isRequestServable;
 
