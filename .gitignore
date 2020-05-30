@@ -1,0 +1,13 @@
+REPORTS/
+
+bankersAlgorithmCPU/*
+!bankersAlgorithmCPU/bankersAlgorithmCPU/
+
+bankersAlgorithmCPU/bankersAlgorithmCPU/*
+!bankersAlgorithmCPU/bankersAlgorithmCPU/*.cpp
+
+bankersAlgorithmGPU/*
+!bankersAlgorithmGPU/bankersAlgorithmGPU/
+
+bankersAlgorithmGPU/bankersAlgorithmGPU/*
+!bankersAlgorithmGPU/bankersAlgorithmGPU/*.cu
