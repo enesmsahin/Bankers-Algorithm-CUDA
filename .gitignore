@@ -1,5 +1,6 @@
 REPORTS/
-
+*.txt
+*.jpg
 bankersAlgorithmCPU/*
 !bankersAlgorithmCPU/bankersAlgorithmCPU/
 

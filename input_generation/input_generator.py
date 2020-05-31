@@ -3,8 +3,8 @@ from random import randint
 
 input_no = 1
 
-numProcesses = 5
-numResources = 10
+numProcesses = 1000
+numResources = 10000
 
 maxResourceAmount = 20 # Maximum amount from a resource i. Resource amounts will be between [0, maxResourceAmount]
 
@@ -24,6 +24,8 @@ info_line += "\n" + "numResources: " + str(numResources)
 info_line += "\n" + "requestingProcessId: " + str(requestingProcessId)
 info_line += "\n" + "maxResourceAmount: " + str(maxResourceAmount)
 
+need_vals = []
+
 max_line = ""
 allocation_line = ""
 need_line = ""
@@ -42,6 +44,7 @@ for i in range(numProcesses):
 
         need_rnd = max_rnd - allocation_rnd # need_ij = max_ij - allocation_ij for a process i and resource j
         need_line += str(need_rnd) + " "
+        need_vals.append(need_rnd)
     
     # Move to next line in text files for the next process
     max_line += "\n"
@@ -53,10 +56,10 @@ for i in range(numResources):
     # Available resource amounts are set to be between [0, maxResourceAmount/2]. This is just for the sake of generality.
     # If it is between [0, maxResourceAmount], it may result in high available amounts and all processes finish easily most of the time.
     # It is done so in order to generate cases where request leads to unsafe states
-    available_rnd = randint(0, maxResourceAmount//2)
+    available_rnd = randint(maxResourceAmount, 10 * maxResourceAmount)
     available_line += str(available_rnd) + " "
 
-    request_rnd = randint(0, maxResourceAmount//6) # maxResourceAmount/6 is used similar reason to the above one, in order to increase chances of request being less than available.
+    request_rnd = randint(0, min(available_rnd, need_vals[requestingProcessId * numResources + i])) # maxResourceAmount/6 is used similar reason to the above one, in order to increase chances of request being less than available.
     request_line += str(request_rnd) + " "
 
 

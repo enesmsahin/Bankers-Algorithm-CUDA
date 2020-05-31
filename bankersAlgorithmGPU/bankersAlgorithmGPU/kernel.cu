@@ -1,11 +1,12 @@
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-#include <device_functions.h>
 
 #include <iostream>
 #include <random>
 #include <cmath>
+#include <fstream>
+#include <stdlib.h>
 
 #define CHECK(status)									            \
 {														                    \
@@ -181,145 +182,102 @@ __global__ void safetyState(int* work, int* need, int* allocation, bool* finish,
 }
 
 
+bool bankersAlgorithmHandler(int*& available_d, int*& max_d, int*& allocation_d, int*& need_d, int*& request_d,
+    int requestingProcessId, int numProcesses, int numResources,
+    cudaStream_t& stream_1, cudaStream_t& stream_2, cudaStream_t& stream_3, cudaStream_t& stream_4);
+
 // Helper functions
+
+/* Reads matrices from text files into host vectors */
+void readMatrices(int*& available, int*& max, int*& allocation, int*& need, int*& request,
+    int& numProcesses, int& numResources, int& requestingProcessId);
+
+/* Prints given matrix to the screen */
 template<class T>
-void printMatrix(T* matrix, int nRows, int nCols, const char* matrixName)
-{
-    std::cout << "\n" << matrixName << ":\n";
-    for (int i = 0; i < nRows; i++)
-    {
-        std::cout << "[ ";
-        for (int j = 0; j < nCols; j++)
-        {
-            std::cout << matrix[i * nCols + j] << " ";
-        }
-        std::cout << "]\n";
-    }
-}
+void printMatrix(T* matrix, int nRows, int nCols, const char* matrixName);
 
 int main()
 {
-    int* available_h, * max_h, * allocation_h, * need_h, * request_h;
+    int* available_h = nullptr, * max_h = nullptr, * allocation_h = nullptr, * need_h = nullptr, * request_h = nullptr;
     int* available_d, * max_d, * allocation_d, * need_d, * request_d;
 
-    int numProcesses = 5;
-    int numResources = 3;
+    int numProcesses;
+    int numResources;
+    int requestingProcessId;
+    
+    readMatrices(available_h, max_h, allocation_h, need_h, request_h, numProcesses, numResources, requestingProcessId);
 
-    // Memory allocations
-    available_h = new int[numResources] {3, 3, 2};
-    max_h = new int[numProcesses * numResources]{ 7, 5, 3,
-                                                3, 2, 2,
-                                                9, 0, 2,
-                                                2, 2, 2,
-                                                4, 3, 3 };
-    allocation_h = new int[numProcesses * numResources]{ 0, 1, 0,
-                                                        2, 0, 0,
-                                                        3, 0, 2,
-                                                        2, 1, 1,
-                                                        0, 0, 2 };
-    need_h = new int[numProcesses * numResources];
+    /*printMatrix<int>(max_h, numProcesses, numResources, "max_h");
+    printMatrix<int>(allocation_h, numProcesses, numResources, "allocation_h");
+    printMatrix<int>(need_h, numProcesses, numResources, "need_h");
+    printMatrix<int>(available_h, 1, numResources, "available_h");
+    printMatrix<int>(request_h, 1, numResources, "request_h");*/
 
-    request_h = new int[numResources] {1, 0, 2};
-    unsigned int requestingProcessId = 1;
 
-    for (int i = 0; i < numProcesses; i++)
-    {
-        for (int j = 0; j < numResources; j++)
-        {
-            need_h[i * numResources + j] = max_h[i * numResources + j] - allocation_h[i * numResources + j];
-        }
-    }
+    StartCounter();
 
-    /*available_h = new int[numResources];
-    max_h = new int[numProcesses * numResources];
-    allocation_h = new int[numProcesses * numResources];
-    need_h = new int[numProcesses * numResources];
-
-    request_h = new int[numResources];
-    unsigned int requestingProcessId = 1;*/
-
+    /* DEVICE MEMORY ALLOCATIONS */
     CHECK(cudaMalloc(&available_d, numResources * sizeof(int)));
     CHECK(cudaMalloc(&max_d, numResources * numProcesses * sizeof(int)));
     CHECK(cudaMalloc(&allocation_d, numResources * numProcesses * sizeof(int)));
     CHECK(cudaMalloc(&need_d, numResources * numProcesses * sizeof(int)));
     CHECK(cudaMalloc(&request_d, numResources * sizeof(int)));
 
-    /* RANDOM INITIALIZATION*/
-
-    //int maxResourceAmount = 6;
-
-    //std::random_device rd;
-    //std::mt19937 mt(rd());
-    //std::uniform_int_distribution<int> dist(0, maxResourceAmount);
-
-    //for (int i = 0; i < numProcesses; i++)
-    //{
-    //    for (int j = 0; j < numResources; j++)
-    //    {
-    //        max_h[i * numResources + j] = dist(mt);
-    //    }
-    //}
-
-    //// allocation_h and need_h matrices. allocation_h can't be greater than max_h. need_h = max_h - allocation_h
-    //for (int i = 0; i < numProcesses; i++)
-    //{
-    //    for (int j = 0; j < numResources; j++)
-    //    {
-    //        dist.param(std::uniform_int_distribution<int>::param_type(0, max_h[i * numResources + j]));
-    //        allocation_h[i * numResources + j] = dist(mt);
-    //        need_h[i * numResources + j] = max_h[i * numResources + j] - allocation_h[i * numResources + j];
-    //    }
-    //}
-    //for (int i = 0; i < numResources; i++)
-    //{
-    //    dist.param(std::uniform_int_distribution<int>::param_type(0, maxResourceAmount / 2));
-    //    available_h[i] = dist(mt);
-    //}
-
-    /*END OF RANDOM INITIALIZATION*/
 
 
-    printMatrix<int>(max_h, numProcesses, numResources, "max_h");
-    printMatrix<int>(allocation_h, numProcesses, numResources, "allocation_h");
-    printMatrix<int>(need_h, numProcesses, numResources, "need_h");
-    printMatrix<int>(available_h, 1, numResources, "available_h");
-    printMatrix<int>(request_h, 1, numResources, "request_h");
-
-    StartCounter();
-
+    /* Create CUDA streams that will be used throughout the program */
     cudaStream_t stream_1, stream_2, stream_3, stream_4;
     CHECK(cudaStreamCreate(&stream_1));
     CHECK(cudaStreamCreate(&stream_2));
     CHECK(cudaStreamCreate(&stream_3));
     CHECK(cudaStreamCreate(&stream_4));
 
-
+    /* Copy initialized host matrices to the allocated device matrices */
     CHECK(cudaMemcpyAsync(available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice, 0));
     CHECK(cudaMemcpyAsync(max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_1));
     CHECK(cudaMemcpyAsync(allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_2));
     CHECK(cudaMemcpyAsync(need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_3));
     CHECK(cudaMemcpyAsync(request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice, stream_4));
 
-    /*SINGLE-STREAM MEMCPY OF MATRICES TO THE DEVICE*/
-    /*cudaStream_t stream_1, stream_2, stream_3, stream_4;
-    CHECK(cudaStreamCreate(&stream_1));
-    CHECK(cudaStreamCreate(&stream_2));
-    CHECK(cudaStreamCreate(&stream_3));
-    CHECK(cudaStreamCreate(&stream_4));
-
-    CHECK(cudaMemcpy(available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice));*/
-
     CHECK(cudaDeviceSynchronize());
 
+    bool isRequestServable;
+
+    isRequestServable = bankersAlgorithmHandler(available_d, max_d, allocation_d, need_d, request_d, requestingProcessId, numProcesses, numResources,
+        stream_1, stream_2, stream_3, stream_4);
+
+    std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n";
+
     double execution_duration = GetCounter();
-    std::cout << "MEMCPY DURATION: " << execution_duration << " ms\n";
+    std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
 
-    bool isRequestValid;
+    // Destroy streams
+    CHECK(cudaStreamDestroy(stream_1));
+    CHECK(cudaStreamDestroy(stream_2));
+    CHECK(cudaStreamDestroy(stream_3));
+    CHECK(cudaStreamDestroy(stream_4));
 
+    // Free allocated memory spaces
+    delete[] available_h;
+    delete[] max_h;
+    delete[] allocation_h;
+    delete[] need_h;
+    delete[] request_h;
+
+ 
+    CHECK(cudaFree(available_d));
+    CHECK(cudaFree(max_d));
+    CHECK(cudaFree(allocation_d));
+    CHECK(cudaFree(need_d));
+    CHECK(cudaFree(request_d));
+
+    return 0;
+}
+
+bool bankersAlgorithmHandler(int* &available_d, int* &max_d, int* &allocation_d, int* &need_d, int* &request_d,
+                                int requestingProcessId, int numProcesses, int numResources,
+                                cudaStream_t &stream_1, cudaStream_t& stream_2, cudaStream_t& stream_3, cudaStream_t& stream_4)
+{
     // VALIDATION STATE
 
     dim3 grid, block;
@@ -327,7 +285,7 @@ int main()
     block.x = std::min(numResources, 1024);
     grid.x = static_cast<unsigned int>(std::ceil(static_cast<double>(numResources) / block.x));
 
-    bool* isNotValidated_h,* isNotValidated_d; // 2 - dim arrays holding whether Request_i < Need(i) and Request_i < Available_i for all i or not
+    bool* isNotValidated_h, * isNotValidated_d; // 2 - dim arrays holding whether Request_i < Need(i) and Request_i < Available_i for all i or not
 
     isNotValidated_h = new bool[2];
 
@@ -344,19 +302,26 @@ int main()
 
     CHECK(cudaDeviceSynchronize());
 
-    if (isNotValidated_h[0] == true || isNotValidated_h[1] == true)
+    if (isNotValidated_h[0] == true)
     {
-        isRequestValid = false;
+        std::cout << "Validation Failed! Request_i < Need(i) is not satisfied!\n";
+        delete[] isNotValidated_h;
+        CHECK(cudaFree(isNotValidated_d));
+        return false;
     }
-    else
+    else if (isNotValidated_h[1] == true)
     {
-        isRequestValid = true;
+        std::cout << "Validation Failed! Request_i < Available(i) is not satisfied!\n";
+        delete[] isNotValidated_h;
+        CHECK(cudaFree(isNotValidated_d));
+        return false;
     }
 
-    std::cout << "Is Request Valid: " << isRequestValid << "\n";
+    delete[] isNotValidated_h;
+    CHECK(cudaFree(isNotValidated_d));
 
     // If request is valid, go to modification state and modify the available, allocation, and need matrices as if the allocation was made
-   
+
     /* MODIFICATION STATE */
 
     subtractVectors << <grid, block, 0, stream_1 >> > (available_d, request_d, numResources); // available(i) = available(i) - request_i
@@ -368,7 +333,7 @@ int main()
     /* END OF MODIFICATION STATE */
 
     /* COPY MODIFIED VECTORS BACK TO THE HOST AND PRINT -- JUST FOR PRINTING AND VERIFICATION. NOT ACTIVATED DURING BENCHMARKING */
-    int* available_h_modified = new int[numResources];
+    /*int* available_h_modified = new int[numResources];
     int* allocation_h_modified = new int[numProcesses * numResources];
     int* need_h_modified = new int[numProcesses * numResources];
     CHECK(cudaMemcpyAsync(available_h_modified, available_d, numResources * sizeof(int), cudaMemcpyDeviceToHost, stream_1));
@@ -383,7 +348,7 @@ int main()
 
     delete[] available_h_modified;
     delete[] need_h_modified;
-    delete[] allocation_h_modified;
+    delete[] allocation_h_modified;*/
 
     /* END OF COPY MODIFIED VECTORS BACK TO THE HOST AND PRINT */
 
@@ -397,8 +362,8 @@ int main()
     CHECK(cudaMalloc(&finish_d, numProcesses * sizeof(bool)));
 
     /* ************************ May not be necessary, just use available_d as work matrix *************************** */
-    CHECK(cudaMemcpyAsync(work_d, available_d, numResources * sizeof(int), cudaMemcpyDeviceToDevice, stream_1));
-    CHECK(cudaMemsetAsync((void*)finish_d, 0, numProcesses * sizeof(bool), stream_2));
+    CHECK(cudaMemcpyAsync(work_d, available_d, numResources * sizeof(int), cudaMemcpyDeviceToDevice, stream_1)); // work = available
+    CHECK(cudaMemsetAsync((void*)finish_d, 0, numProcesses * sizeof(bool), stream_2)); // finish[i] = false for all i
 
     CHECK(cudaDeviceSynchronize());
 
@@ -422,37 +387,140 @@ int main()
 
     CHECK(cudaMemcpy(finish_h, finish_d, numProcesses * sizeof(bool), cudaMemcpyDeviceToHost));
 
-    printMatrix<bool>(finish_h, 1, numProcesses, "finish_h");
+    //printMatrix<bool>(finish_h, 1, numProcesses, "finish_h");
 
-    std::cout << "IS SAFE: " << *isSafe_h << "\n";
+    delete[] finish_h;
 
-    // Destroy streams
-    CHECK(cudaStreamDestroy(stream_1));
-    CHECK(cudaStreamDestroy(stream_2));
-    CHECK(cudaStreamDestroy(stream_3));
-    CHECK(cudaStreamDestroy(stream_4));
-
-    // Free allocated memory spaces
-    delete[] available_h;
-    delete[] max_h;
-    delete[] allocation_h;
-    delete[] need_h;
-    delete[] request_h;
-
-    delete[] isNotValidated_h;
-    delete isSafe_h;
-
-
-    CHECK(cudaFree(available_d));
-    CHECK(cudaFree(max_d));
-    CHECK(cudaFree(allocation_d));
-    CHECK(cudaFree(need_d));
-    CHECK(cudaFree(request_d));
-
-    CHECK(cudaFree(isNotValidated_d));
     CHECK(cudaFree(work_d));
     CHECK(cudaFree(finish_d));
     CHECK(cudaFree(isSafe_d));
 
-    return 0;
+    if (*isSafe_h == true)
+    {
+        std::cout << "All processes can terminate succesfully if allocation is made. So, allocation is servable!\n";
+        delete isSafe_h;
+        return true;
+    }
+    else
+    {
+        std::cout << "All processes CANNOT terminate succesfully if allocation is made. So, allocation IS NOT servable!\n";
+        delete isSafe_h;
+        return false;
+    }
+}
+
+
+void readMatrices(int*& available, int*& max, int*& allocation, int*& need, int*& request,
+    int& numProcesses, int& numResources, int& requestingProcessId)
+{
+    std::ifstream info_file("info_1.txt");
+    std::string info;
+
+    /* PARSE INFO FILE */
+    if (info_file.is_open())
+    {
+        while (info_file >> info)
+        {
+            if (info == "numProcesses:")
+            {
+                info_file >> numProcesses;
+            }
+            else if (info == "numResources:")
+            {
+                info_file >> numResources;
+            }
+            else if (info == "requestingProcessId:")
+            {
+                info_file >> requestingProcessId;
+            }
+        }
+        info_file.close();
+    }
+    else
+    {
+        std::cout << "UNABLE TO OPEN INFO FILE!\n";
+        exit(1);
+    }
+
+    /* HOST MEMORY ALLOCATIONS */
+    available = new int[numResources];
+    max = new int[numProcesses * numResources];
+    allocation = new int[numProcesses * numResources];
+    need = new int[numProcesses * numResources];
+    request = new int[numResources];
+
+    if ((available == nullptr) || (max == nullptr) || (allocation == nullptr) || (need == nullptr) || (request == nullptr))
+    {
+        std::cout << "HOST MEMORY ALLOCATION ERROR!\n";
+        exit(1);
+    }
+
+    std::ifstream available_file("available_1.txt");
+    std::ifstream max_file("max_1.txt");
+    std::ifstream allocation_file("allocation_1.txt");
+    std::ifstream need_file("need_1.txt");
+    std::ifstream request_file("request_1.txt");
+
+    /* CHECK IF FILES ARE OPENED SUCCESSFULLY */
+    if (!available_file.is_open())
+    {
+        std::cout << "UNABLE TO OPEN AVAILABLE FILE!\n";
+        exit(1);
+    }
+    if (!max_file.is_open())
+    {
+        std::cout << "UNABLE TO OPEN MAX FILE!\n";
+        exit(1);
+    }
+    if (!allocation_file.is_open())
+    {
+        std::cout << "UNABLE TO OPEN ALLOCATION FILE!\n";
+        exit(1);
+    }
+    if (!need_file.is_open())
+    {
+        std::cout << "UNABLE TO OPEN NEED FILE!\n";
+        exit(1);
+    }
+    if (!request_file.is_open())
+    {
+        std::cout << "UNABLE TO OPEN REQUEST FILE!\n";
+        exit(1);
+    }
+
+    /* READ MATRICES INTO HOST ARRAYS FROM TEXT FILES */
+    for (int i = 0; i < numProcesses * numResources; i++)
+    {
+        if (i < numResources)
+        {
+            available_file >> available[i];
+            request_file >> request[i];
+        }
+
+        max_file >> max[i];
+        allocation_file >> allocation[i];
+        need_file >> need[i];
+    }
+
+    /* CLOSE FILES */
+    available_file.close();
+    max_file.close();
+    allocation_file.close();
+    need_file.close();
+    request_file.close();
+}
+
+template<class T>
+void printMatrix(T* matrix, int nRows, int nCols, const char* matrixName)
+{
+    std::cout << "\n" << matrixName << ":\n";
+    for (int i = 0; i < nRows; i++)
+    {
+        std::cout << "[ ";
+        for (int j = 0; j < nCols; j++)
+        {
+            std::cout << matrix[i * nCols + j] << " ";
+        }
+        std::cout << "]\n";
+    }
 }
