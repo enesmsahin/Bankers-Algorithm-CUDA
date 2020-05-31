@@ -90,9 +90,14 @@ __global__ void addVectorsAtomic(int* vecA, int* vecB, int vecSize)
 __global__ void safetyState(int* work, int* need, int* allocation, bool* finish, int numResources, int numProcesses, bool* isSafe)
 {
     unsigned int tid = threadIdx.x; // Process ID in Banker's Algorithm.
-    extern __shared__ bool finish_shared[];
+    
+    /* workUpdatedFlag is used in order to indicate if a change is made to the work vector or not, i.e. if at least one process finished during that iteration.
+    This flag is shared by al processes. If one process is finished during that iteration, corresponding thread sets this flag to true.
+    This flag is reset to false at each iteration by thread 0.
+    This flag will also be used for determining whether the state is safe or not.See below for explanation. */
+    __shared__ bool workUpdatedFlag; 
 
-    finish_shared[tid] = finish[tid]; // Copy finish vector to the shared memory
+    bool isFinished = finish[tid]; // Copy finish vector to the registers
 
     dim3 grid_d, block_d; // grid and block for dynamic parallelism
     
@@ -102,28 +107,24 @@ __global__ void safetyState(int* work, int* need, int* allocation, bool* finish,
     bool* isNeedGreaterThanWork; // Flag to be set if need(i) <= work is not satisfied
     cudaMalloc(&isNeedGreaterThanWork, sizeof(bool));
 
-    /* Last element of the shared memory is used in order to indicate if a change is made to the work vector or not,
-    i.e. if at least one process finished during that iteration.
-
-    This flag will also be used for determining whether state is safe or not. See below for explanation. */
     if (tid == 0)
     {
-        finish_shared[blockDim.x] = true;
+        workUpdatedFlag = true;
     }
 
-    while (finish_shared[tid] == false)
+    while (isFinished == false)
     {
         __syncthreads();
 
         /* If at least one change is made to the work vector by any of the processes (or if it is the first iteration),
         check need(i) <= work(i) for all unfinished processes. If it is false, no process was able to finis during that iteration,
         so safety check terminates */
-        if (finish_shared[blockDim.x] == true)
+        if (workUpdatedFlag == true)
         {
             __syncthreads();
             if (tid == 0)
             {
-                finish_shared[blockDim.x] = false; // Reset work vector's update flag
+                workUpdatedFlag = false; // Reset work vector's update flag
             }
 
             *isNeedGreaterThanWork = false;
@@ -131,12 +132,12 @@ __global__ void safetyState(int* work, int* need, int* allocation, bool* finish,
             checkIfGreater << <grid_d, block_d >> > (&need[tid * numResources], work, numResources, isNeedGreaterThanWork);
             cudaDeviceSynchronize(); // Wait for child kernel to finish
 
-            if (*isNeedGreaterThanWork == false) // Second condition is also satisfied, this process can finish given the current states of matrices
+            if (*isNeedGreaterThanWork == false) // need(i) < work is also satisfied, this process can finish given the current states of matrices
             {
                 addVectorsAtomic << <grid_d, block_d >> > (work, &allocation[tid * numResources], numResources); // Move resources allocated to this process to the work matrix
-                finish_shared[tid] = true; // Set finish flag of this process to true
+                isFinished = true; // Set finish flag of this process to true
 
-                finish_shared[blockDim.x] = true; // A change has been made to the work vector, update flag
+                workUpdatedFlag = true; // A change has been made to the work vector, update flag
 
                 cudaDeviceSynchronize(); // Wait for child kernel to finish
             }
@@ -150,7 +151,7 @@ __global__ void safetyState(int* work, int* need, int* allocation, bool* finish,
     __syncthreads();
 
 
-    /* SCENARIOS FOR STATE OF THE finish_shared[blockDim.x] flag:
+    /* SCENARIOS FOR STATE OF THE workUpdatedFlag flag:
 
     1 - NONE OF THE PROCESSES IS ABLE TO FINISH AT FIRST ITERATION, flag is set to false. At the 2nd iteration, loop is broken. flag == false
 
@@ -158,13 +159,13 @@ __global__ void safetyState(int* work, int* need, int* allocation, bool* finish,
         So, none of the processes is able to set the flag to true. At the next iteration, loop is broken. flag == false
 
     3 - ALL OF THE PROCESSES ARE ABLE TO FINISH. At the last iteration, last process finished and set flag = true.
-        At the next iteration, none of the processes has finish_shared[tid] == false since all of them are finished. Loop is exited and flag == true.
+        At the next iteration, none of the processes has isFinished == false since all of them are finished. Loop is exited and flag == true.
 
     So, if the state is safe, i.e. all processes are able to finish (Scenario - 3), then flag == true. Otherwise, if the state is unsafe, flag == false.
     */
     if (tid == 0)
     {
-        if (finish_shared[blockDim.x] == true)
+        if (workUpdatedFlag == true)
         {
             *isSafe = true;
         }
@@ -174,7 +175,7 @@ __global__ void safetyState(int* work, int* need, int* allocation, bool* finish,
         }
     }
 
-    finish[tid] = finish_shared[tid];
+    finish[tid] = isFinished;
 
     cudaFree(isNeedGreaterThanWork);
 }
