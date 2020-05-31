@@ -73,7 +73,11 @@ int main()
 	std::vector<int> need;
 	std::vector<int> request;
 
+	std::cout << "Matrices are being read from the text files...\n\n";
+
 	readMatrices(available, max, allocation, need, request, numProcesses, numResources, requestingProcessId);
+
+	std::cout << "Matrices are read from the text files. Execution of the algorithm begins.\n\n";
 
 	/*printMatrix<int>(max, numProcesses, numResources, "max");
 	printMatrix<int>(allocation, numProcesses, numResources, "allocation");
@@ -94,7 +98,7 @@ int main()
 		isRequestServable = bankersAlgorithmParallel(numProcesses, numResources, available, max, allocation, need, request, requestingProcessId);
 	}
 
-	std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n";
+	std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n\n";
 
 	double execution_duration = GetCounter();
     std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
@@ -203,12 +207,12 @@ bool bankersAlgorithmSequential(int numProcesses, int numResources, const std::v
 
 	if (it_finish == finish.end())
 	{
-		std::cout << "All processes can terminate succesfully if allocation is made. So, allocation is servable!\n";
+		std::cout << "All processes CAN terminate succesfully if the allocation is made. So, the request IS servable!\n\n";
 		return true;
 	}
 	else
 	{
-		std::cout << "All processes CANNOT terminate succesfully if allocation is made. So, allocation IS NOT servable!\n";
+		std::cout << "All processes CANNOT terminate succesfully if the allocation is made. So, the request IS NOT servable!\n\n";
 		return false;
 	}
 }
@@ -368,7 +372,7 @@ bool bankersAlgorithmParallel(int numProcesses, int numResources, const std::vec
 void readMatrices(std::vector<int>& available, std::vector<int>& max, std::vector<int>& allocation, std::vector<int>& need, std::vector<int>& request,
 	int& numProcesses, int& numResources, int& requestingProcessId)
 {
-	std::ifstream info_file("info_1.txt");
+	std::ifstream info_file("info.txt");
 	std::string info;
 
 	/* PARSE INFO FILE */
@@ -405,11 +409,11 @@ void readMatrices(std::vector<int>& available, std::vector<int>& max, std::vecto
 	request.resize(numResources);
 
 
-	std::ifstream available_file("available_1.txt");
-	std::ifstream max_file("max_1.txt");
-	std::ifstream allocation_file("allocation_1.txt");
-	std::ifstream need_file("need_1.txt");
-	std::ifstream request_file("request_1.txt");
+	std::ifstream available_file("available.txt");
+	std::ifstream max_file("max.txt");
+	std::ifstream allocation_file("allocation.txt");
+	std::ifstream need_file("need.txt");
+	std::ifstream request_file("request.txt");
 
 	/* CHECK IF FILES ARE OPENED SUCCESSFULLY */
 	if (!available_file.is_open())

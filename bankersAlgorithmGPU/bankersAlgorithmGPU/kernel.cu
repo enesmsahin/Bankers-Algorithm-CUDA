@@ -205,7 +205,11 @@ int main()
     int numResources;
     int requestingProcessId;
     
+    std::cout << "Matrices are being read from the text files...\n\n";
+
     readMatrices(available_h, max_h, allocation_h, need_h, request_h, numProcesses, numResources, requestingProcessId);
+
+    std::cout << "Matrices are read from the text files. Execution of the algorithm begins.\n\n";
 
     /*printMatrix<int>(max_h, numProcesses, numResources, "max_h");
     printMatrix<int>(allocation_h, numProcesses, numResources, "allocation_h");
@@ -246,10 +250,7 @@ int main()
     isRequestServable = bankersAlgorithmHandler(available_d, max_d, allocation_d, need_d, request_d, requestingProcessId, numProcesses, numResources,
         stream_1, stream_2, stream_3, stream_4);
 
-    std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n";
-
-    double execution_duration = GetCounter();
-    std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
+    std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n\n";
 
     // Destroy streams
     CHECK(cudaStreamDestroy(stream_1));
@@ -257,19 +258,23 @@ int main()
     CHECK(cudaStreamDestroy(stream_3));
     CHECK(cudaStreamDestroy(stream_4));
 
-    // Free allocated memory spaces
+    // Free GPU allocations
+    CHECK(cudaFree(available_d));
+    CHECK(cudaFree(max_d));
+    CHECK(cudaFree(allocation_d));
+    CHECK(cudaFree(need_d));
+    CHECK(cudaFree(request_d));
+
+    // Free host allocations
     delete[] available_h;
     delete[] max_h;
     delete[] allocation_h;
     delete[] need_h;
     delete[] request_h;
 
- 
-    CHECK(cudaFree(available_d));
-    CHECK(cudaFree(max_d));
-    CHECK(cudaFree(allocation_d));
-    CHECK(cudaFree(need_d));
-    CHECK(cudaFree(request_d));
+
+    double execution_duration = GetCounter();
+    std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
 
     return 0;
 }
@@ -397,13 +402,13 @@ bool bankersAlgorithmHandler(int* &available_d, int* &max_d, int* &allocation_d,
 
     if (*isSafe_h == true)
     {
-        std::cout << "All processes can terminate succesfully if allocation is made. So, allocation is servable!\n";
+        std::cout << "All processes CAN terminate succesfully if the allocation is made. So, the request IS servable!\n\n";
         delete isSafe_h;
         return true;
     }
     else
     {
-        std::cout << "All processes CANNOT terminate succesfully if allocation is made. So, allocation IS NOT servable!\n";
+        std::cout << "All processes CANNOT terminate succesfully if the allocation is made. So, the request IS NOT servable!\n\n";
         delete isSafe_h;
         return false;
     }
@@ -413,7 +418,7 @@ bool bankersAlgorithmHandler(int* &available_d, int* &max_d, int* &allocation_d,
 void readMatrices(int*& available, int*& max, int*& allocation, int*& need, int*& request,
     int& numProcesses, int& numResources, int& requestingProcessId)
 {
-    std::ifstream info_file("info_1.txt");
+    std::ifstream info_file("info.txt");
     std::string info;
 
     /* PARSE INFO FILE */
@@ -455,11 +460,11 @@ void readMatrices(int*& available, int*& max, int*& allocation, int*& need, int*
         exit(1);
     }
 
-    std::ifstream available_file("available_1.txt");
-    std::ifstream max_file("max_1.txt");
-    std::ifstream allocation_file("allocation_1.txt");
-    std::ifstream need_file("need_1.txt");
-    std::ifstream request_file("request_1.txt");
+    std::ifstream available_file("available.txt");
+    std::ifstream max_file("max.txt");
+    std::ifstream allocation_file("allocation.txt");
+    std::ifstream need_file("need.txt");
+    std::ifstream request_file("request.txt");
 
     /* CHECK IF FILES ARE OPENED SUCCESSFULLY */
     if (!available_file.is_open())

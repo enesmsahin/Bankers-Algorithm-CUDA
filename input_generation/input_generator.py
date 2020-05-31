@@ -1,8 +1,6 @@
 import numpy as np
 from random import randint
 
-input_no = 1
-
 numProcesses = 1000
 numResources = 10000
 
@@ -10,13 +8,13 @@ maxResourceAmount = 20 # Maximum amount from a resource i. Resource amounts will
 
 requestingProcessId = 0
 
-info_file = open("info_" + str(input_no) + ".txt", "a+")
+info_file = open("info.txt", "a+")
 
-max_file = open("max_" + str(input_no) + ".txt", "a+")
-allocation_file = open("allocation_" + str(input_no) + ".txt", "a+")
-need_file = open("need_" + str(input_no) + ".txt", "a+")
-available_file = open("available_" + str(input_no) + ".txt", "a+")
-request_file = open("request_" + str(input_no) + ".txt", "a+")
+max_file = open("max.txt", "a+")
+allocation_file = open("allocation.txt", "a+")
+need_file = open("need.txt", "a+")
+available_file = open("available.txt", "a+")
+request_file = open("request.txt", "a+")
 
 info_line = ""
 info_line += "numProcesses: " + str(numProcesses)
@@ -81,4 +79,4 @@ need_file.close()
 available_file.close()
 request_file.close()
 
-print("Input file no: " + str(input_no) + "\nInput generation completed!")
+print("Input generation completed!")
