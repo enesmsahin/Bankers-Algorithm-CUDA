@@ -1,6 +1,6 @@
-REPORTS/
 *.txt
 *.jpg
+
 bankersAlgorithmCPU/*
 !bankersAlgorithmCPU/bankersAlgorithmCPU/
 
@@ -12,3 +12,9 @@ bankersAlgorithmGPU/*
 
 bankersAlgorithmGPU/bankersAlgorithmGPU/*
 !bankersAlgorithmGPU/bankersAlgorithmGPU/*.cu
+
+REPORTS/*
+!REPORTS/final_report/
+
+REPORTS/final_report/*
+!REPORTS/final_report/*.docx
