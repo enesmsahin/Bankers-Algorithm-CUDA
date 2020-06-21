@@ -12,7 +12,7 @@ Please read the following instructions carefully in order to execute the code.
 ## Visual Studio Settings
 For the GPU implementation we utilize Dynamic Parallelism. Programs with Dynamic Parallelism require additional project settings in the Visual Studio in order to be compiled and run:
 
-1. Go to project properties: View -> Property Pages
+1. Right click project in the solution explorer and go to **Properties**.
 2. Under Configuration Properties -> CUDA C/C++ -> Common set **Generate Relocatable Device Code** to **Yes (-rdc=true)**
 3. Under Configuration Properties -> CUDA C/C++ -> Device set **Code Generation** to **compute_35,sm_35**
 4. Under Configuration Properties -> Linker -> Input -> Additional Dependencies add **cudadevrt.lib**
