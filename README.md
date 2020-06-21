@@ -16,6 +16,7 @@ For the GPU implementation we utilize Dynamic Parallelism. Programs with Dynamic
 2. Under Configuration Properties -> CUDA C/C++ -> Common set **Generate Relocatable Device Code** to **Yes (-rdc=true)**
 3. Under Configuration Properties -> CUDA C/C++ -> Device set **Code Generation** to **compute_35,sm_35**
 4. Under Configuration Properties -> Linker -> Input -> Additional Dependencies add **cudadevrt.lib**
+5. Make sure that execution settings (Debug/Release option) is the same as the configuration in the Properties window.
 
 Source: https://stackoverflow.com/a/59383269/9817067
 
