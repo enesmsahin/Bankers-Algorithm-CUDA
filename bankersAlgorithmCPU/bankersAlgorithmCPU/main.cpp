@@ -111,7 +111,7 @@ int main()
 		totalExecDuration += execution_duration;
 	}
 
-	std::cout << "Average Execution Duration: " << totalExecDuration / numExecutions << "\n\n";
+	std::cout << "Average Execution Duration: " << totalExecDuration / numExecutions << " ms\n\n";
 
 	return 0;
 }

@@ -280,8 +280,8 @@ int main()
         totalExecDuration += execution_duration;
     }
     
-    std::cout << "\n\nAverage Execution Duration: " << totalExecDuration / (numExecutions - 1) << "\n";
-    std::cout << "Average Execution Duration (including first execution): " << (totalExecDuration + firstExecDuration) / (numExecutions) << "\n\n";
+    std::cout << "\n\nAverage Execution Duration: " << totalExecDuration / (numExecutions - 1) << " ms\n";
+    std::cout << "Average Execution Duration (including first execution): " << (totalExecDuration + firstExecDuration) / (numExecutions) << " ms\n\n";
 
     // Free host allocations
     delete[] available_h;
