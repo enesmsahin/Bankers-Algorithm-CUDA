@@ -123,10 +123,9 @@ __global__ void safetyState(int* work, int* need, int* allocation, bool* finish,
         if (workUpdatedFlag == true)
         {
             __syncthreads();
-            if (tid == 0)
-            {
-                workUpdatedFlag = false; // Reset work vector's update flag
-            }
+
+            workUpdatedFlag = false; // Reset work vector's update flag
+
 
             *isNeedGreaterThanWork = false;
             // Check if need(i) <= work(i) for all i. If not, isNeedGreaterThanWork becomes true
@@ -217,53 +216,72 @@ int main()
     printMatrix<int>(available_h, 1, numResources, "available_h");
     printMatrix<int>(request_h, 1, numResources, "request_h");*/
 
+    int numExecutions = 10;
+    double totalExecDuration = 0;
+    double firstExecDuration;
 
-    StartCounter();
+    for (int i = 0; i < numExecutions; i++)
+    {
+        StartCounter();
 
-    /* DEVICE MEMORY ALLOCATIONS */
-    CHECK(cudaMalloc(&available_d, numResources * sizeof(int)));
-    CHECK(cudaMalloc(&max_d, numResources * numProcesses * sizeof(int)));
-    CHECK(cudaMalloc(&allocation_d, numResources * numProcesses * sizeof(int)));
-    CHECK(cudaMalloc(&need_d, numResources * numProcesses * sizeof(int)));
-    CHECK(cudaMalloc(&request_d, numResources * sizeof(int)));
+        /* DEVICE MEMORY ALLOCATIONS */
+        CHECK(cudaMalloc(&available_d, numResources * sizeof(int)));
+        CHECK(cudaMalloc(&max_d, numResources * numProcesses * sizeof(int)));
+        CHECK(cudaMalloc(&allocation_d, numResources * numProcesses * sizeof(int)));
+        CHECK(cudaMalloc(&need_d, numResources * numProcesses * sizeof(int)));
+        CHECK(cudaMalloc(&request_d, numResources * sizeof(int)));
 
 
 
-    /* Create CUDA streams that will be used throughout the program */
-    cudaStream_t stream_1, stream_2, stream_3, stream_4;
-    CHECK(cudaStreamCreate(&stream_1));
-    CHECK(cudaStreamCreate(&stream_2));
-    CHECK(cudaStreamCreate(&stream_3));
-    CHECK(cudaStreamCreate(&stream_4));
+        /* Create CUDA streams that will be used throughout the program */
+        cudaStream_t stream_1, stream_2, stream_3, stream_4;
+        CHECK(cudaStreamCreate(&stream_1));
+        CHECK(cudaStreamCreate(&stream_2));
+        CHECK(cudaStreamCreate(&stream_3));
+        CHECK(cudaStreamCreate(&stream_4));
 
-    /* Copy initialized host matrices to the allocated device matrices */
-    CHECK(cudaMemcpyAsync(available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice, 0));
-    CHECK(cudaMemcpyAsync(max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_1));
-    CHECK(cudaMemcpyAsync(allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_2));
-    CHECK(cudaMemcpyAsync(need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_3));
-    CHECK(cudaMemcpyAsync(request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice, stream_4));
+        /* Copy initialized host matrices to the allocated device matrices */
+        CHECK(cudaMemcpyAsync(available_d, available_h, numResources * sizeof(int), cudaMemcpyHostToDevice, 0));
+        CHECK(cudaMemcpyAsync(max_d, max_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_1));
+        CHECK(cudaMemcpyAsync(allocation_d, allocation_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_2));
+        CHECK(cudaMemcpyAsync(need_d, need_h, numResources * numProcesses * sizeof(int), cudaMemcpyHostToDevice, stream_3));
+        CHECK(cudaMemcpyAsync(request_d, request_h, numResources * sizeof(int), cudaMemcpyHostToDevice, stream_4));
 
-    CHECK(cudaDeviceSynchronize());
+        CHECK(cudaDeviceSynchronize());
 
-    bool isRequestServable;
+        bool isRequestServable;
 
-    isRequestServable = bankersAlgorithmHandler(available_d, max_d, allocation_d, need_d, request_d, requestingProcessId, numProcesses, numResources,
-        stream_1, stream_2, stream_3, stream_4);
+        isRequestServable = bankersAlgorithmHandler(available_d, max_d, allocation_d, need_d, request_d, requestingProcessId, numProcesses, numResources,
+            stream_1, stream_2, stream_3, stream_4);
 
-    std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n\n";
+        std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n\n";
 
-    // Destroy streams
-    CHECK(cudaStreamDestroy(stream_1));
-    CHECK(cudaStreamDestroy(stream_2));
-    CHECK(cudaStreamDestroy(stream_3));
-    CHECK(cudaStreamDestroy(stream_4));
+        // Destroy streams
+        CHECK(cudaStreamDestroy(stream_1));
+        CHECK(cudaStreamDestroy(stream_2));
+        CHECK(cudaStreamDestroy(stream_3));
+        CHECK(cudaStreamDestroy(stream_4));
 
-    // Free GPU allocations
-    CHECK(cudaFree(available_d));
-    CHECK(cudaFree(max_d));
-    CHECK(cudaFree(allocation_d));
-    CHECK(cudaFree(need_d));
-    CHECK(cudaFree(request_d));
+        // Free GPU allocations
+        CHECK(cudaFree(available_d));
+        CHECK(cudaFree(max_d));
+        CHECK(cudaFree(allocation_d));
+        CHECK(cudaFree(need_d));
+        CHECK(cudaFree(request_d));
+
+        double execution_duration = GetCounter();
+        std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
+
+        if (i == 0)
+        {
+            firstExecDuration = execution_duration;
+            continue;
+        }
+        totalExecDuration += execution_duration;
+    }
+    
+    std::cout << "\n\nAverage Execution Duration: " << totalExecDuration / (numExecutions - 1) << "\n";
+    std::cout << "Average Execution Duration (including first execution): " << (totalExecDuration + firstExecDuration) / (numExecutions) << "\n\n";
 
     // Free host allocations
     delete[] available_h;
@@ -272,9 +290,6 @@ int main()
     delete[] need_h;
     delete[] request_h;
 
-
-    double execution_duration = GetCounter();
-    std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
 
     return 0;
 }
@@ -366,7 +381,6 @@ bool bankersAlgorithmHandler(int* &available_d, int* &max_d, int* &allocation_d,
     CHECK(cudaMalloc(&work_d, numResources * sizeof(int)));
     CHECK(cudaMalloc(&finish_d, numProcesses * sizeof(bool)));
 
-    /* ************************ May not be necessary, just use available_d as work matrix *************************** */
     CHECK(cudaMemcpyAsync(work_d, available_d, numResources * sizeof(int), cudaMemcpyDeviceToDevice, stream_1)); // work = available
     CHECK(cudaMemsetAsync((void*)finish_d, 0, numProcesses * sizeof(bool), stream_2)); // finish[i] = false for all i
 
@@ -380,7 +394,7 @@ bool bankersAlgorithmHandler(int* &available_d, int* &max_d, int* &allocation_d,
     dim3 block_safety;
     block_safety.x = std::min(numProcesses, 1024);
 
-    safetyState << <1, block_safety, (block_safety.x + 1) * sizeof(bool), stream_1 >> > (work_d, need_d, allocation_d, finish_d, numResources, numProcesses, isSafe_d);
+    safetyState << <1, block_safety>> > (work_d, need_d, allocation_d, finish_d, numResources, numProcesses, isSafe_d);
 
     CHECK(cudaDeviceSynchronize());
 
@@ -402,13 +416,13 @@ bool bankersAlgorithmHandler(int* &available_d, int* &max_d, int* &allocation_d,
 
     if (*isSafe_h == true)
     {
-        std::cout << "All processes CAN terminate succesfully if the allocation is made. So, the request IS servable!\n\n";
+        std::cout << "All processes CAN terminate succesfully if the allocation is made (SAFE STATE). So, the request IS servable!\n\n";
         delete isSafe_h;
         return true;
     }
     else
     {
-        std::cout << "All processes CANNOT terminate succesfully if the allocation is made. So, the request IS NOT servable!\n\n";
+        std::cout << "All processes CANNOT terminate succesfully if the allocation is made (UNSAFE STATE). So, the request IS NOT servable!\n\n";
         delete isSafe_h;
         return false;
     }

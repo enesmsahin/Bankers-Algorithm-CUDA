@@ -85,23 +85,33 @@ int main()
 	printMatrix<int>(available, 1, numResources, "available");
 	printMatrix<int>(request, 1, numResources, "request");*/
 
-	StartCounter();
+	int numExecutions = 10;
+	double totalExecDuration = 0;
 
-	bool isRequestServable;
-
-	if (!multiThreaded)
+	for (int i = 0; i < numExecutions; i++)
 	{
-		isRequestServable = bankersAlgorithmSequential(numProcesses, numResources, available, max, allocation, need, request, requestingProcessId);
-	}
-	else
-	{
-		isRequestServable = bankersAlgorithmParallel(numProcesses, numResources, available, max, allocation, need, request, requestingProcessId);
+		StartCounter();
+
+		bool isRequestServable;
+
+		if (!multiThreaded)
+		{
+			isRequestServable = bankersAlgorithmSequential(numProcesses, numResources, available, max, allocation, need, request, requestingProcessId);
+		}
+		else
+		{
+			isRequestServable = bankersAlgorithmParallel(numProcesses, numResources, available, max, allocation, need, request, requestingProcessId);
+		}
+
+		std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n\n";
+
+		double execution_duration = GetCounter();
+		std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
+
+		totalExecDuration += execution_duration;
 	}
 
-	std::cout << "IS REQUESTED ALLOCATION SERVABLE: " << isRequestServable << "\n\n";
-
-	double execution_duration = GetCounter();
-    std::cout << "EXECUTION DURATION: " << execution_duration << " ms\n";
+	std::cout << "Average Execution Duration: " << totalExecDuration / numExecutions << "\n\n";
 
 	return 0;
 }
@@ -207,12 +217,12 @@ bool bankersAlgorithmSequential(int numProcesses, int numResources, const std::v
 
 	if (it_finish == finish.end())
 	{
-		std::cout << "All processes CAN terminate succesfully if the allocation is made. So, the request IS servable!\n\n";
+		std::cout << "All processes CAN terminate succesfully if allocation is made (SAFE STATE). So, allocation IS servable!\n";
 		return true;
 	}
 	else
 	{
-		std::cout << "All processes CANNOT terminate succesfully if the allocation is made. So, the request IS NOT servable!\n\n";
+		std::cout << "All processes CANNOT terminate succesfully if allocation is made (UNSAFE STATE). So, allocation IS NOT servable!\n";
 		return false;
 	}
 }
@@ -357,12 +367,12 @@ bool bankersAlgorithmParallel(int numProcesses, int numResources, const std::vec
 
 	if (it_finish == finish.end())
 	{
-		std::cout << "All processes can terminate succesfully if allocation is made. So, allocation is servable!\n";
+		std::cout << "All processes CAN terminate succesfully if allocation is made (SAFE STATE). So, allocation IS servable!\n";
 		return true;
 	}
 	else
 	{
-		std::cout << "All processes CANNOT terminate succesfully if allocation is made. So, allocation IS NOT servable!\n";
+		std::cout << "All processes CANNOT terminate succesfully if allocation is made (UNSAFE STATE). So, allocation IS NOT servable!\n";
 		return false;
 	}
 
