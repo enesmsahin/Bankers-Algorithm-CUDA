@@ -5,9 +5,9 @@ Please read the following instructions carefully in order to execute the code.
 
 ## Requirements:
 
-CUDA **5.0** or higher
-NVIDIA GPU with compute capability **3.5** or higher
-Windows environment (due to benchmarking functions using `<windows.h>`)
+* CUDA **5.0** or higher
+* NVIDIA GPU with compute capability **3.5** or higher
+* Windows environment (due to benchmarking functions using `<windows.h>`)
 
 ## Visual Studio Settings
 For the GPU implementation we utilize Dynamic Parallelism. Programs with Dynamic Parallelism require additional project settings in the Visual Studio in order to be compiled and run:
