@@ -1,9 +1,6 @@
 # Bankers-Algorithm-CUDA
 CUDA Implementation of Banker's Algorithm for Deadlock Avoidance
 
-### **Presentation video, demo video and datasets** are available in the following link:
-https://drive.google.com/drive/folders/1cRBKjLIWWOzm-KwLJBmPKPIDMwyOCmWF?usp=sharing
-
 Please read the following instructions carefully in order to execute the code.
 
 ## Requirements:
