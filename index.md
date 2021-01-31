@@ -1,37 +1,32 @@
-## Welcome to GitHub Pages
+# Bankers-Algorithm-CUDA
+CUDA Implementation of Banker's Algorithm for Deadlock Avoidance
 
-You can use the [editor on GitHub](https://github.com/menessahin/Bankers-Algorithm-CUDA/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
+Please read the following instructions carefully in order to execute the code.
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+## Requirements:
 
-### Markdown
+* CUDA **5.0** or higher
+* NVIDIA GPU with compute capability **3.5** or higher
+* Windows environment (due to benchmarking functions using `<windows.h>`)
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+## Visual Studio Settings
+For the GPU implementation we utilize Dynamic Parallelism. Programs with Dynamic Parallelism require additional project settings in the Visual Studio in order to be compiled and run:
 
-```markdown
-Syntax highlighted code block
+1. Right click project in the solution explorer and go to **Properties**.
+2. Under Configuration Properties -> CUDA C/C++ -> Common set **Generate Relocatable Device Code** to **Yes (-rdc=true)**
+3. Under Configuration Properties -> CUDA C/C++ -> Device set **Code Generation** to **compute_35,sm_35**
+4. Under Configuration Properties -> Linker -> Input -> Additional Dependencies add **cudadevrt.lib**
+5. Make sure that execution settings (Debug/Release option) is the same as the configuration in the Properties window.
 
-# Header 1
-## Header 2
-### Header 3
+Source: https://stackoverflow.com/a/59383269/9817067
 
-- Bulleted
-- List
+## Notes about execution of the program
+* Program requires `allocation.txt`, `available.txt`, `max.txt`, `need.txt`, `request.txt`, and `info.txt` to be available in the directory of the executable. Modify the paths under `readMatrices()` function accordingly if you would like to store datasets in somewhere else.
 
-1. Numbered
-2. List
+* Datasets used during experiments are provided in the `DATASETS.rar` file. You can unzip that file, pick a dataset and copy 6 text files to the execution folder in order to test them. My experimental results of each implementation in all datasets are also provided in _results_ folder of each dataset.
 
-**Bold** and _Italic_ and `Code` text
+* Note that depending on the dataset size, loading matrices from the disk to the memory may take a long time. Please be aware.
 
-[Link](url) and ![Image](src)
-```
+* There is a flag named **`multiThreaded`** in the beginning of the main function of CPU implementation. Set this flag to `true` if you would like to execute partially-parallel version of CPU implementation. When it is set to `false`, all operations are performed sequentially, in a single thread.
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/menessahin/Bankers-Algorithm-CUDA/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://support.github.com/contact) and we’ll help you sort it out.
+* Algorithm outputs whether the requested allocation is servable or not by printing a message to the terminal. In order to print some intermediate data structures you can uncomment necessary lines in the codes or add your own print statements.
