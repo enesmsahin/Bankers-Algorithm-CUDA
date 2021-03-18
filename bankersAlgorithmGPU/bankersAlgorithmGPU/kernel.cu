@@ -284,12 +284,17 @@ int main()
     std::cout << "Average Execution Duration (including first execution): " << (totalExecDuration + firstExecDuration) / (numExecutions) << " ms\n\n";
 
     // Free host allocations
-    delete[] available_h;
+    /*delete[] available_h;
     delete[] max_h;
     delete[] allocation_h;
     delete[] need_h;
-    delete[] request_h;
+    delete[] request_h;*/
 
+    cudaFreeHost(available_h);
+    cudaFreeHost(max_h);
+    cudaFreeHost(allocation_h);
+    cudaFreeHost(need_h);
+    cudaFreeHost(request_h);
 
     return 0;
 }
@@ -462,11 +467,17 @@ void readMatrices(int*& available, int*& max, int*& allocation, int*& need, int*
     }
 
     /* HOST MEMORY ALLOCATIONS */
-    available = new int[numResources];
+    /*available = new int[numResources];
     max = new int[numProcesses * numResources];
     allocation = new int[numProcesses * numResources];
     need = new int[numProcesses * numResources];
-    request = new int[numResources];
+    request = new int[numResources];*/
+
+    cudaHostAlloc(&available, sizeof(int) * numResources, cudaHostAllocDefault);
+    cudaHostAlloc(&max, sizeof(int) * numProcesses * numResources, cudaHostAllocDefault);
+    cudaHostAlloc(&allocation, sizeof(int) * numProcesses * numResources, cudaHostAllocDefault);
+    cudaHostAlloc(&need, sizeof(int) * numProcesses * numResources, cudaHostAllocDefault);
+    cudaHostAlloc(&request, sizeof(int) * numResources, cudaHostAllocDefault);
 
     if ((available == nullptr) || (max == nullptr) || (allocation == nullptr) || (need == nullptr) || (request == nullptr))
     {
